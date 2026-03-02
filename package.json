@@ -3,7 +3,7 @@
   "version": "0.0.0-semantic-release",
   "main": "dist/gcpHsmToAccount.js",
   "typings": "dist/gcpHsmToAccount.d.ts",
-  "repository": "https://github.com/valora-inc/viem-account-hsm-gcp",
+  "repository": "https://github.com/valora-xyz/viem-account-hsm-gcp",
   "author": "Valora Inc",
   "license": "Apache-2.0",
   "engines": {
