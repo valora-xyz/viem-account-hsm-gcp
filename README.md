@@ -1,10 +1,10 @@
 # @valora/viem-account-hsm-gcp
 
-[![GitHub License](https://img.shields.io/github/license/valora-inc/viem-account-hsm-gcp?color=blue)](https://github.com/valora-inc/viem-account-hsm-gcp/blob/main/LICENSE)
+[![GitHub License](https://img.shields.io/github/license/valora-xyz/viem-account-hsm-gcp?color=blue)](https://github.com/valora-xyz/viem-account-hsm-gcp/blob/main/LICENSE)
 [![npm version](https://img.shields.io/npm/v/@valora/viem-account-hsm-gcp.svg)](https://www.npmjs.com/package/@valora/viem-account-hsm-gcp)
-[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/valora-inc/viem-account-hsm-gcp/.github/workflows/workflow.yaml?branch=main)](https://github.com/valora-inc/viem-account-hsm-gcp/actions/workflows/workflow.yaml?query=branch%3Amain)
-[![Codecov](https://img.shields.io/codecov/c/github/valora-inc/viem-account-hsm-gcp)](https://codecov.io/gh/valora-inc/viem-account-hsm-gcp)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/valora-inc/viem-account-hsm-gcp#contributing)
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/valora-xyz/viem-account-hsm-gcp/.github/workflows/workflow.yaml?branch=main)](https://github.com/valora-xyz/viem-account-hsm-gcp/actions/workflows/workflow.yaml?query=branch%3Amain)
+[![Codecov](https://img.shields.io/codecov/c/github/valora-xyz/viem-account-hsm-gcp)](https://codecov.io/gh/valora-xyz/viem-account-hsm-gcp)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/valora-xyz/viem-account-hsm-gcp#contributing)
 
 Use a Google Cloud HSM key to sign transactions with [viem](https://viem.sh/).
 
@@ -64,8 +64,8 @@ Big thanks to the Celo team for the original implementation.
 
 ## Contributing
 
-- [Reporting issues](https://github.com/valora-inc/viem-account-hsm-gcp/issues)
-- [Submitting a pull request](https://github.com/valora-inc/viem-account-hsm-gcp/pulls)
+- [Reporting issues](https://github.com/valora-xyz/viem-account-hsm-gcp/issues)
+- [Submitting a pull request](https://github.com/valora-xyz/viem-account-hsm-gcp/pulls)
 - Publishing updates is done automatically via [semantic-release](https://github.com/semantic-release/semantic-release).
   Remember to use [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) or your PR will be rejected (since
   merging it would mess up the changelog and version numbers).
