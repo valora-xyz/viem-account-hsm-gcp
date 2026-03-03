@@ -1,6 +1,7 @@
 import { KeyManagementServiceClient } from '@google-cloud/kms'
 import * as asn1 from 'asn1js'
 import { LocalAccount, publicKeyToAddress, toAccount } from 'viem/accounts'
+import type { NonceManager } from 'viem/accounts'
 import {
   Hex,
   Signature,
@@ -123,9 +124,11 @@ async function sign(
 export async function gcpHsmToAccount({
   hsmKeyVersion,
   kmsClient: kmsClient_,
+  nonceManager,
 }: {
   hsmKeyVersion: string
   kmsClient?: KeyManagementServiceClient
+  nonceManager?: NonceManager
 }): Promise<GcpHsmAccount> {
   const kmsClient = kmsClient_ ?? new KeyManagementServiceClient()
   const publicKey = await getPublicKey(kmsClient, hsmKeyVersion)
@@ -133,6 +136,7 @@ export async function gcpHsmToAccount({
 
   const account = toAccount({
     address,
+    nonceManager,
     async signMessage({ message }) {
       const signature = await sign(
         kmsClient,
