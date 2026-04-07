@@ -43,6 +43,23 @@ const hash = await client.sendTransaction({
 })
 ```
 
+### Usage with nonce manager
+
+```typescript
+import { createNonceManager, jsonRpc } from 'viem'
+import { gcpHsmToAccount } from '@valora/viem-account-hsm-gcp'
+
+const nonceManager = createNonceManager({
+  source: jsonRpc(),
+})
+
+const account = await gcpHsmToAccount({
+  hsmKeyVersion:
+    'projects/your-gcp-project/locations/global/keyRings/your-keyring/cryptoKeys/your-hsm/cryptoKeyVersions/1',
+  nonceManager,
+})
+```
+
 > [!IMPORTANT]  
 > Make sure the key in [Google Cloud KMS](https://console.cloud.google.com/security/kms/keyrings) is a secp256k1 key.
 
