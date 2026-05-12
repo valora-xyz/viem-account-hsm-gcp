@@ -2,6 +2,8 @@ import { KeyManagementServiceClient } from '@google-cloud/kms'
 import { secp256k1 } from '@noble/curves/secp256k1'
 import {
   Hex,
+  createWalletClient,
+  custom,
   hexToBytes,
   parseEther,
   parseGwei,
@@ -11,6 +13,7 @@ import {
   verifyHash,
   verifyMessage,
 } from 'viem'
+import type { NonceManager } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import * as asn1 from 'asn1js'
 import { gcpHsmToAccount } from './gcpHsmToAccount'
@@ -94,6 +97,79 @@ describe('gcpHsmToAccount', () => {
       source: 'gcpHsm',
       type: 'local',
     })
+  })
+
+  it('sets nonce manager when provided', async () => {
+    const nonceManager = {
+      consume: jest.fn(async () => 0),
+      get: jest.fn(async () => 0),
+      increment: jest.fn(),
+      reset: jest.fn(),
+    } satisfies NonceManager
+
+    const gcpHsmAccount = await gcpHsmToAccount({
+      hsmKeyVersion: MOCK_GCP_HSM_KEY_NAME,
+      kmsClient: mockKmsClient,
+      nonceManager,
+    })
+
+    expect(gcpHsmAccount.nonceManager).toBe(nonceManager)
+  })
+
+  it('uses provided nonce manager when sending transactions via wallet client', async () => {
+    const nonceManager = {
+      consume: jest.fn(async () => 7),
+      get: jest.fn(async () => 7),
+      increment: jest.fn(),
+      reset: jest.fn(),
+    } satisfies NonceManager
+    const request = jest.fn(async ({ method }: { method: string }) => {
+      if (method === 'eth_sendRawTransaction') {
+        return '0x38f286174f6749f0a2968ccf0ef8f29428f6cf289f5af0f3259252f905f5f5c4'
+      }
+
+      throw new Error(`Unexpected RPC method: ${method}`)
+    })
+
+    const gcpHsmAccount = await gcpHsmToAccount({
+      hsmKeyVersion: MOCK_GCP_HSM_KEY_NAME,
+      kmsClient: mockKmsClient,
+      nonceManager,
+    })
+    const client = createWalletClient({
+      account: gcpHsmAccount,
+      chain: {
+        id: 1,
+        name: 'Mainnet',
+        nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' },
+        rpcUrls: {
+          default: { http: ['https://example.com'] },
+        },
+      },
+      transport: custom({ request }),
+    })
+
+    const hash = await client.sendTransaction({
+      gas: 21000n,
+      maxFeePerGas: parseGwei('20'),
+      maxPriorityFeePerGas: parseGwei('2'),
+      to: ACCOUNT2.address,
+      value: parseEther('1'),
+    })
+
+    expect(hash).toBe(
+      '0x38f286174f6749f0a2968ccf0ef8f29428f6cf289f5af0f3259252f905f5f5c4',
+    )
+    expect(nonceManager.consume).toHaveBeenCalledTimes(1)
+    expect(nonceManager.consume).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: gcpHsmAccount.address,
+        chainId: 1,
+      }),
+    )
+    expect(request.mock.calls.map(([call]) => call.method)).toEqual([
+      'eth_sendRawTransaction',
+    ])
   })
 
   it('throws an error when given an unknown hsm key', async () => {
