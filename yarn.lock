@@ -386,10 +386,10 @@
   resolved "https://registry.yarnpkg.com/@fastify/busboy/-/busboy-2.1.1.tgz#b9da6a878a371829a0502c9b6c1c143ef6663f4d"
   integrity sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==
 
-"@google-cloud/kms@^5.4.0":
-  version "5.4.0"
-  resolved "https://registry.yarnpkg.com/@google-cloud/kms/-/kms-5.4.0.tgz#b4c830eae9280ba333b797ec3fb3a6cc6799fd3b"
-  integrity sha512-+06zUCaJM+wyZISM3F6u/jSqoBs0iZ8Aj9rqOJFePoWkNN7FbR4mQpV7okGHA+Y7caVgq+4QtIDKiFd17SZT+A==
+"@google-cloud/kms@^5.7.0":
+  version "5.7.0"
+  resolved "https://registry.yarnpkg.com/@google-cloud/kms/-/kms-5.7.0.tgz#4b0f7c945ac22d5390841daff24cc6ced27a2b2c"
+  integrity sha512-bxsauk8eUHfFEY9kLIbEfjHYhT0/7K+gDAsSzoR1ob7WK2vO0PuXYqn0kIFxTC38+0wYXp5qYfZL1+xSPBxfnw==
   dependencies:
     google-gax "^5.0.0"
 
