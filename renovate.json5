@@ -1,3 +1,9 @@
 {
   extends: ['github>valora-xyz/renovate-config:default.json5'],
+  packageRules: [
+    {
+      matchDepTypes: ['dependencies', 'devDependencies', 'resolutions'],
+      rangeStrategy: 'pin',
+    },
+  ],
 }
