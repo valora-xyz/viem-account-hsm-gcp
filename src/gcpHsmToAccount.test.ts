@@ -1,3 +1,4 @@
+import { crc32c as calculateCrc32c } from '@aws-crypto/crc32c'
 import { KeyManagementServiceClient } from '@google-cloud/kms'
 import { secp256k1 } from '@noble/curves/secp256k1'
 import {
@@ -45,40 +46,66 @@ function derFromPublicKey(publicKey: Hex): Buffer {
   return Buffer.from(sequence.toBER(false))
 }
 
+const getPublicKey = async ({ name: versionName }: { name: string }) => {
+  const privateKey = MOCK_KEYS.get(versionName)
+  if (!privateKey) {
+    throw new Error(`Unable to locate key: '${versionName}'`)
+  }
+
+  const pubKey = secp256k1.getPublicKey(privateKey.slice(2), false)
+  const derKey = derFromPublicKey(toHex(pubKey))
+  const pem = `-----BEGIN PUBLIC KEY-----\n${derKey
+    .toString('base64')
+    .match(/.{0,64}/g)!
+    .join('\n')}-----END PUBLIC KEY-----\n`
+  return [
+    {
+      name: versionName,
+      pem,
+      pemCrc32c: { value: calculateCrc32c(Buffer.from(pem)) },
+    },
+  ]
+}
+
+const asymmetricSign = async ({
+  name,
+  digest,
+}: {
+  name: string
+  digest: { sha256: Buffer }
+}) => {
+  const privateKey = MOCK_KEYS.get(name)
+  if (!privateKey) {
+    throw new Error(`Unable to locate key: ${name}`)
+  }
+
+  const signature = secp256k1.sign(digest.sha256, privateKey.slice(2))
+  const derSignature = Buffer.from(signature.toDERRawBytes())
+
+  return [
+    {
+      name,
+      signature: derSignature,
+      signatureCrc32c: { value: calculateCrc32c(derSignature) },
+      verifiedDigestCrc32c: true,
+    },
+  ]
+}
+
+const mockGetPublicKey = jest.fn(getPublicKey)
+const mockAsymmetricSign = jest.fn(asymmetricSign)
+
 const mockKmsClient = {
-  getPublicKey: async ({ name: versionName }: { name: string }) => {
-    const privateKey = MOCK_KEYS.get(versionName)
-    if (!privateKey) {
-      throw new Error(`Unable to locate key: '${versionName}'`)
-    }
-
-    const pubKey = secp256k1.getPublicKey(privateKey.slice(2), false)
-    const derKey = derFromPublicKey(toHex(pubKey))
-    const pem = `-----BEGIN PUBLIC KEY-----\n${derKey
-      .toString('base64')
-      .match(/.{0,64}/g)!
-      .join('\n')}-----END PUBLIC KEY-----\n`
-    return [{ pem }]
-  },
-  asymmetricSign: async ({
-    name,
-    digest,
-  }: {
-    name: string
-    digest: { sha256: Buffer }
-  }) => {
-    const privateKey = MOCK_KEYS.get(name)
-    if (!privateKey) {
-      throw new Error(`Unable to locate key: ${name}`)
-    }
-
-    const signature = secp256k1.sign(digest.sha256, privateKey.slice(2))
-
-    return [{ signature: signature.toDERRawBytes() }]
-  },
+  getPublicKey: mockGetPublicKey,
+  asymmetricSign: mockAsymmetricSign,
 } as unknown as KeyManagementServiceClient
 
 describe('gcpHsmToAccount', () => {
+  beforeEach(() => {
+    mockGetPublicKey.mockReset().mockImplementation(getPublicKey)
+    mockAsymmetricSign.mockReset().mockImplementation(asymmetricSign)
+  })
+
   it('returns a valid viem account when given a known hsm key', async () => {
     const gcpHsmAccount = await gcpHsmToAccount({
       hsmKeyVersion: MOCK_GCP_HSM_KEY_NAME,
@@ -103,6 +130,34 @@ describe('gcpHsmToAccount', () => {
         kmsClient: mockKmsClient,
       }),
     ).rejects.toThrow("Unable to locate key: 'an-unknown-key'")
+  })
+
+  it('rejects a public key response for a different key version', async () => {
+    mockGetPublicKey.mockImplementationOnce(async (request) => {
+      const [response] = await getPublicKey(request)
+      return [{ ...response, name: 'a-different-key-version' }]
+    })
+
+    await expect(
+      gcpHsmToAccount({
+        hsmKeyVersion: MOCK_GCP_HSM_KEY_NAME,
+        kmsClient: mockKmsClient,
+      }),
+    ).rejects.toThrow('GetPublicKey: request corrupted in-transit')
+  })
+
+  it('rejects a public key response with an invalid CRC32C checksum', async () => {
+    mockGetPublicKey.mockImplementationOnce(async (request) => {
+      const [response] = await getPublicKey(request)
+      return [{ ...response, pemCrc32c: { value: 0 } }]
+    })
+
+    await expect(
+      gcpHsmToAccount({
+        hsmKeyVersion: MOCK_GCP_HSM_KEY_NAME,
+        kmsClient: mockKmsClient,
+      }),
+    ).rejects.toThrow('GetPublicKey: response corrupted in-transit')
   })
 
   it('signs a message', async () => {
@@ -136,6 +191,13 @@ describe('gcpHsmToAccount', () => {
       '0xd9eba16ed0ecae432b71fe008c98cc872bb4cc214d3220a36f365326cf807d68'
     const signature = await gcpHsmAccount.sign({ hash })
 
+    const digest = Buffer.from(hexToBytes(hash))
+    expect(mockAsymmetricSign).toHaveBeenCalledWith({
+      name: MOCK_GCP_HSM_KEY_NAME,
+      digest: { sha256: digest },
+      digestCrc32c: { value: calculateCrc32c(digest) },
+    })
+
     expect(signature).toBe(
       '0x08c183d08a952dcd603148842de1d7844a1a6d72a3761840ebe10a570240821e3348c9296af823c8f4de5258f997fa35ee4ad8fce79cda929021f6976d0c10431c',
     )
@@ -146,6 +208,57 @@ describe('gcpHsmToAccount', () => {
         signature: signature,
       }),
     ).resolves.toBeTruthy()
+  })
+
+  it('rejects a signature when KMS did not verify the digest checksum', async () => {
+    const gcpHsmAccount = (await gcpHsmToAccount({
+      hsmKeyVersion: MOCK_GCP_HSM_KEY_NAME,
+      kmsClient: mockKmsClient,
+    })) as { sign: (params: { hash: Hex }) => Promise<Hex> }
+    mockAsymmetricSign.mockImplementationOnce(async (request) => {
+      const [response] = await asymmetricSign(request)
+      return [{ ...response, verifiedDigestCrc32c: false }]
+    })
+
+    await expect(
+      gcpHsmAccount.sign({
+        hash: '0xd9eba16ed0ecae432b71fe008c98cc872bb4cc214d3220a36f365326cf807d68',
+      }),
+    ).rejects.toThrow('AsymmetricSign: request corrupted in-transit')
+  })
+
+  it('rejects a signature response for a different key version', async () => {
+    const gcpHsmAccount = (await gcpHsmToAccount({
+      hsmKeyVersion: MOCK_GCP_HSM_KEY_NAME,
+      kmsClient: mockKmsClient,
+    })) as { sign: (params: { hash: Hex }) => Promise<Hex> }
+    mockAsymmetricSign.mockImplementationOnce(async (request) => {
+      const [response] = await asymmetricSign(request)
+      return [{ ...response, name: 'a-different-key-version' }]
+    })
+
+    await expect(
+      gcpHsmAccount.sign({
+        hash: '0xd9eba16ed0ecae432b71fe008c98cc872bb4cc214d3220a36f365326cf807d68',
+      }),
+    ).rejects.toThrow('AsymmetricSign: request corrupted in-transit')
+  })
+
+  it('rejects a signature response with an invalid CRC32C checksum', async () => {
+    const gcpHsmAccount = (await gcpHsmToAccount({
+      hsmKeyVersion: MOCK_GCP_HSM_KEY_NAME,
+      kmsClient: mockKmsClient,
+    })) as { sign: (params: { hash: Hex }) => Promise<Hex> }
+    mockAsymmetricSign.mockImplementationOnce(async (request) => {
+      const [response] = await asymmetricSign(request)
+      return [{ ...response, signatureCrc32c: { value: 0 } }]
+    })
+
+    await expect(
+      gcpHsmAccount.sign({
+        hash: '0xd9eba16ed0ecae432b71fe008c98cc872bb4cc214d3220a36f365326cf807d68',
+      }),
+    ).rejects.toThrow('AsymmetricSign: response corrupted in-transit')
   })
 
   it('signs a transaction', async () => {

@@ -43,6 +43,7 @@
     "viem": "^2.9.20"
   },
   "dependencies": {
+    "@aws-crypto/crc32c": "^5.2.0",
     "@google-cloud/kms": "^5.7.0",
     "@noble/curves": "^1.9.7",
     "asn1js": "^3.0.10"

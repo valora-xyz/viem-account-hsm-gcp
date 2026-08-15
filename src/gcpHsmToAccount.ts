@@ -1,3 +1,4 @@
+import { crc32c } from '@aws-crypto/crc32c'
 import { KeyManagementServiceClient } from '@google-cloud/kms'
 import * as asn1 from 'asn1js'
 import { LocalAccount, publicKeyToAddress, toAccount } from 'viem/accounts'
@@ -30,6 +31,12 @@ async function getPublicKey(
   const [pk] = await kmsClient.getPublicKey({ name: hsmKeyVersion })
   if (!pk.pem) {
     throw new Error('PublicKey pem is not defined')
+  }
+  if (pk.name !== hsmKeyVersion) {
+    throw new Error('GetPublicKey: request corrupted in-transit')
+  }
+  if (crc32c(Buffer.from(pk.pem)) !== Number(pk.pemCrc32c?.value)) {
+    throw new Error('GetPublicKey: response corrupted in-transit')
   }
   const derEncodedPk = pemToDer(pk.pem)
   return publicKeyFromDer(derEncodedPk)
@@ -64,19 +71,36 @@ async function signWithKms(
   hsmKeyVersion: string,
   hash: Uint8Array,
 ): Promise<SignatureType> {
+  const digest = Buffer.from(hash)
   const [signResponse] = await kmsClient.asymmetricSign({
     name: hsmKeyVersion,
     digest: {
-      sha256: hash,
+      sha256: digest,
     },
+    digestCrc32c: { value: crc32c(digest) },
   })
+
+  if (
+    signResponse.name !== hsmKeyVersion ||
+    !signResponse.verifiedDigestCrc32c
+  ) {
+    throw new Error('AsymmetricSign: request corrupted in-transit')
+  }
+  if (!signResponse.signature) {
+    throw new Error('AsymmetricSign: signature is not defined')
+  }
+  const signature =
+    typeof signResponse.signature === 'string'
+      ? Buffer.from(signResponse.signature, 'base64')
+      : Buffer.from(signResponse.signature)
+  if (crc32c(signature) !== Number(signResponse.signatureCrc32c?.value)) {
+    throw new Error('AsymmetricSign: response corrupted in-transit')
+  }
 
   // Return normalized signature
   // > All transaction signatures whose s-value is greater than secp256k1n/2 are now considered invalid.
   // See https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2.md
-  return secp256k1.Signature.fromDER(
-    signResponse.signature as Buffer,
-  ).normalizeS()
+  return secp256k1.Signature.fromDER(signature).normalizeS()
 }
 
 /**
